@@ -2,6 +2,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include <string.h>
+#include <dirent.h>
 #include "libsodium-1.0.18/src/libsodium/include/sodium.h"
 #include "rand_things.h"
 
@@ -11,7 +12,8 @@
 #define MEMLIMIT_JLMMECHA 32000000000U //32 GB
 #define OPSLIMIT_ENIGMECHA 10U // 10 ops
 #define MEMLIMIT_ENIGMECHA 1000000000U //1 GB
-
+#define OUTPUT_DIR_KEY_FILE "./.key"
+#define OUTPUT_DIR_SALT_FILE "./.salt"
 
 
 unsigned char salt[64];
@@ -20,21 +22,21 @@ uint64_t saltbytes;
 struct timeval tv;
 char tm_str[sizeof tv.tv_sec];
 
-
 void get_timestmp() {
 
     gettimeofday(&tv,NULL);
     sprintf(tm_str, "%lu", tv.tv_sec);
 
-
 }
 
+//opt 1: Print salt to file
+//opt 2: print hashed string to file
 void to_file(int opt) {
 
     FILE *sf_ptr;
 
     if (opt == 1) {
-        char filename[+sizeof(".")+sizeof(tm_str)];
+        char filename[sizeof(".")+sizeof(tm_str)];
 
         strcpy(filename,"salt");
         strcat(filename, tm_str);
@@ -89,7 +91,7 @@ void to_file(int opt) {
         fread(unsinereadout, sizeof(unsinereadout), 1, sf_ptr);
 
         printf("OUT:\n\t");
-        printf("%s", unsinereadout);
+        //printf("%s", unsinereadout);
 
         *unsinereadout == *out ? printf("\nyes\n") : printf("\nNo\n");
 
@@ -97,18 +99,15 @@ void to_file(int opt) {
 
     }
 
-
-
 }
-
 
 unsigned char* mk_hash(const char* to_be_hashed) {
 
     if (sodium_init() < 0) {
-        printf("Sodium init Error!");
+        fprintf(stderr, "Sodium init Error!");
         exit(1);
     }
-
+    mk_salt(NULL);
     const unsigned char* salt_inst = salt;
     unsigned long long passlen = 256;
     unsigned long long outlen = 256+sizeof(salt_inst);
@@ -120,12 +119,9 @@ unsigned char* mk_hash(const char* to_be_hashed) {
                   crypto_pwhash_OPSLIMIT_SENSITIVE,
                       crypto_pwhash_MEMLIMIT_SENSITIVE,
                   crypto_pwhash_ALG_DEFAULT) < 0) {
-        printf("Hashing Error!");
+        fprintf(stderr,"Hashing Error!");
         exit(1);
     }
-
-
-    printf("%s", out);
 
     return out;
 
@@ -133,19 +129,16 @@ unsigned char* mk_hash(const char* to_be_hashed) {
 
 unsigned char* mk_salt(const char* inp) {
 
+
     saltbytes = rando_64();
 
     sprintf((char *) salt, "%lu", saltbytes);
 
-
     return salt;
-
 
 }
 
-
-
-uint32_t rando_32(void) {
+uint64_t rando_32(void) {
 
     char buff[] = {};
 //uint32_t usr_in[3] = {0};
@@ -163,7 +156,7 @@ uint32_t rando_32(void) {
     printf("%u\n", rnd_byts);
 
     randombytes_close();
-    return rnd_byts;
+    return (int64_t) rnd_byts;
 }
 
 uint64_t rando_64(void) {
@@ -188,19 +181,53 @@ uint64_t rando_64(void) {
     return rnd_byts;
 }
 
-int main(void) {
+int chk_hash(int64_t hash, char* passwd)
+{
+
+}
+
+
+int main(int argc, char** argv) {
     get_timestmp();
-
-    //uint32_t rnd32_u = rando_32();
-    //printf("%u", rnd32_u);
-    //uint64_t rnd64_u = rando_64();
-    //printf("%lu", rnd64_u);
-
-    //printf("%s", mk_salt(NULL));
-    mk_salt(NULL);
-    mk_hash(PWD);
-    to_file(2);
+    int arg_begin = 0;
+    int valid = -1;
+    char* result_out;
+    char* func_arg;
+    char* flags[OPT_ARR_LEN] = {"-h" ,"-r32","-r64","-f","-s","-chk", NULL};
+    enum Opt_Cmds optCmds[OPT_ARR_LEN] = {HASH,RNDA,RNDB,TOFI,SALT,CHSH, END};
+    void *opts [OPT_ARR_LEN] = { &mk_hash, &rando_32, &rando_64, &to_file, &salt, &chk_hash, NULL};
 
 
+    if (argc > 1) {
+        for (int i = 0; i < argc; i++) {
+            if (memchr(argv[i], '\\', sizeof(argv[i]))) {
+                arg_begin = i;
+            }
+        }
 
+        func_arg = (char*) malloc(sizeof(argv[arg_begin]));
+        strcpy(func_arg, argv[arg_begin]);
+
+    }
+
+    if (strcmp(func_arg, flags[RNDA]) == 0) {
+        uint16_t *(*rando)() = opts[RNDA];
+    }
+    else if (strcmp(func_arg, flags[RNDB]) == 0) {
+        uint16_t *(*rando)() = opts[RNDB];
+    }
+    else if (strcmp(func_arg, flags[HASH]) == 0) {
+         unsigned char *(*rando)() = opts[HASH];
+    }
+    else if (strcmp(func_arg, flags[SALT]) == 0) {
+        unsigned char *(*rando)() = opts[SALT];
+    }
+    else if (strcmp(func_arg, flags[CHSH]) == 0) {
+        int *(*rando)() = opts[CHSH];
+    }
+
+
+    free(func_arg);
+    //
+    // free(argv);
 }
