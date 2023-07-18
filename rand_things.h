@@ -10,7 +10,28 @@
 
 uint64_t rando_64(void);
 uint64_t rando_32(void);
-unsigned char* mk_salt(const char*);
+
+void* mk_salt(unsigned char* out[320],
+              const unsigned char* inp,
+              int to_bytes);
+
+void* mk_hash_key(const char* to_be_hashed,
+                  unsigned char* salt_inst[64],
+                  unsigned char* hashed_out[320],
+                  int give_salt);
+
+void* to_file(unsigned char* salt[64],
+              unsigned char* hashed[320],
+              int opt);
+
+void* read_hash_in(const char** filename, unsigned char** hash_file_content, unsigned char** out_salt);
+
+int chk_hash(unsigned char* salt_to_use[64],
+             unsigned char* hash_to_chk[320],
+             const char* passwd);
+
+
+
 
 
 enum Opt_Cmds {
@@ -26,13 +47,11 @@ enum Opt_Cmds {
                     // OUT: <uint_64>
         TOFI = 3, //Print values to file, appended to hashing or salting opts
                     // IN: <prev cmd flags> <char* "tofile" | "-f">
-        SALT = 4, //Generate random 64-bit Salt
-                    // IN: NULL
-                    // RET: uint
-        CHSH = 5, //Compare given password str to a hash value
+
+        CHSH = 4, //Compare given password str to a hash value
                     // IN: hashchk <char* passwd>, <uint_64 hash[320]>, <uint64 salt[64]
                     // RET: int 0 - passed comparison check, int 1 - failed cmp chk
-        END = 6
+        END = 5
 
 };
 
