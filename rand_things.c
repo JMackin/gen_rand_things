@@ -32,11 +32,12 @@ void get_timestmp() {
 }
 
 // opt 1 = salt (bytes), opt 2 = hashkey (bytes), opt 4 = hashkey (ascii)
-void* to_file(unsigned char* salt[64], unsigned char* hashed[320], int opt) {
+int to_file(unsigned char* salt, unsigned char* hashed, int opt) {
 
     FILE *sf_ptr;
     int opt_ch = opt<<1;
-    char* filename = (char *) malloc(CHAR_MAX-16);
+    //char* filename = (char *) malloc(CHAR_MAX-16);
+    //char* filename[(sizeof("salt")+sizeof(tm_str))];
 
 decr:
     opt_ch = opt_ch>>1;
@@ -45,43 +46,34 @@ decr:
         case 8:
             opt_ch = opt_ch>>1;
             goto hshstr_out;
-            break;
+
         case 4:
             goto hshkey_out;
-            break;
+
         case 2:
             goto salt_out;
-            break;
+
         case 1:
-            printf("\n%d\n", (*filename ? *filename : -1));
             return 0;
-            break;
+
         default:
-            goto cleanup;
-            break;
+            return 1;
     }
 
 
     salt_out:
 
+    //char* filen1[(sizeof("salt")+sizeof(tm_str))];
+    //strcpy(*filename,"salt");
 
-        if (!realloc(filename, (size_t) sizeof("salt")+sizeof(*tm_str))) {
-            free(filename);
-            fprintf(stderr, "memory failure allocating for filename");
-        }
-
-
-        strcpy(filename,"salt");
-        strcat(filename, *tm_str);
-
-        sf_ptr = fopen(filename, "wb");
+        sf_ptr = fopen("salt_out", "wb");
 
         if(sf_ptr == NULL)
         {
             printf("Error!");
             exit(1);
         }
-        fwrite(salt, sizeof(*salt), 1, sf_ptr);
+        fwrite(&salt, sizeof(&salt), 1, sf_ptr);
         fclose(sf_ptr);
 
         goto decr;
@@ -89,29 +81,23 @@ decr:
 
     hshkey_out:
 
-    if (!realloc(filename, (size_t) sizeof("hshkey")+sizeof(*tm_str))) {
-        free(filename);
-        fprintf(stderr, "memory failure allocating for filename");
-    }
-        filename[sizeof("key")+sizeof(tm_str)];
+   // char* filen2[(sizeof("key")+sizeof(tm_str))];
+    //strcpy((char *) filename, "key");
 
-        strcpy(filename,"key");
-        strcat(filename, *tm_str);
-
-        sf_ptr = fopen(filename, "wb");
+        sf_ptr = fopen("key_out", "wb");
 
         if(sf_ptr == NULL)
         {
             fprintf(stderr, "File-open Error");
         }
 
-        fwrite(hashed, sizeof(*hashed), 1, sf_ptr);
+        fwrite(&hashed, sizeof(&hashed), 1, sf_ptr);
 
         fclose(sf_ptr);
 
-        sf_ptr = fopen(filename, "rb");
-        fflush(sf_ptr);
-
+       // sf_ptr = fopen(*filename, "rb");
+        //fflush(sf_ptr);
+        goto decr;
 
 
     hshstr_out:
@@ -119,49 +105,45 @@ decr:
         printf("not implemented yet.");
         goto decr;
 
-    cleanup:
-        if (strlen(filename) > 2) {
-            free(filename);
-        };
 
 }
 
-void* mk_hash_key(const char* to_be_hashed, unsigned char* salt_inst[64], unsigned char* hashed_out[320], int give_salt) {
+void mk_hash_key(const char* to_be_hashed, unsigned char salt_inst[64],  int give_salt, int tofile) {
 
-
-
-    if (sodium_init() < 0) {
-        fprintf(stderr, "Sodium init Error!");
-        exit(1);
-    }
 
     if (give_salt == 0) {
-        *salt_inst = mk_salt(salt_inst, NULL, 0);
+        mk_salt((unsigned char **) salt_inst, NULL, 0);
     }
 
-    unsigned long long passlen = 256;
-    unsigned long long outlen = 256+sizeof(*salt_inst);
+//    unsigned long long passlen = strlen(to_be_hashed);
+//    unsigned long long outlen = crypto_box_SEEDBYTES;
 
     // Salt+Password
+//
+//    unsigned char salt[crypto_pwhash_SALTBYTES];
+    //randombytes_buf(salt, sizeof salt);
+    unsigned char key[crypto_box_SEEDBYTES];
 
 
-    if ((crypto_pwhash(*hashed_out,
-                  outlen,
-                  to_be_hashed,
-                      passlen,
-                  *salt_inst,
-                  crypto_pwhash_OPSLIMIT_SENSITIVE,
+    if (crypto_pwhash(key,
+                      sizeof key,
+                      to_be_hashed,
+                      strlen(to_be_hashed),
+                      salt_inst,
+                      crypto_pwhash_OPSLIMIT_SENSITIVE,
                       crypto_pwhash_MEMLIMIT_SENSITIVE,
-                  crypto_pwhash_ALG_DEFAULT)) < 0) {
+                      crypto_pwhash_ALG_DEFAULT) < 0) {
         fprintf(stderr,"Hashing Error!");
         exit(1);
-    }
 
-    return hashed_out;
+    }
+    if (tofile == 1) {
+        to_file(salt_inst, key, 4);
+    }
 
 }
 
-void* mk_salt(unsigned char* salt[64], const unsigned char* inp, int to_bytes) {
+void mk_salt(unsigned char* salt[64], const unsigned char* inp, int to_bytes) {
 
     if (inp != NULL && to_bytes == 1) {
 
@@ -171,10 +153,10 @@ void* mk_salt(unsigned char* salt[64], const unsigned char* inp, int to_bytes) {
 
         for (int i = 0; i < 64; i++) {
 
-            *salt[i] = *inp;
+            **salt = *inp;
         }
 
-    } else if (!*inp) {
+    } else if (!(inp)) {
 
         saltbytes = rando_64();
 
@@ -184,9 +166,9 @@ void* mk_salt(unsigned char* salt[64], const unsigned char* inp, int to_bytes) {
 
     }
 
-    sprintf((char *) salt, "%lu", saltbytes);
 
-    return salt;
+    randombytes_buf(&salt[64], sizeof salt[64]);
+    to_file(*salt, NULL, 1);
 
 }
 
@@ -233,7 +215,7 @@ uint64_t rando_64(void) {
     return rnd_byts;
 }
 
-void* read_hash_in(const char** filename, unsigned char** hash_file_content, unsigned char** out_salt) {
+void read_hash_in(const char** filename, unsigned char** hash_file_content, unsigned char** out_salt) {
 
     char* file_path[strlen("./") + strlen(*filename)];
     strcpy(*file_path, "./");
@@ -277,21 +259,24 @@ void* read_hash_in(const char** filename, unsigned char** hash_file_content, uns
         }
     }
 
-
-
-
 }
 
 
 int chk_hash(unsigned char* salt_to_use[64], unsigned char* hash_to_chk[320], const char* passwd)
 {
-    mk_hash_key(passwd,salt_to_use,hash_to_chk,1);
+    mk_hash_key(passwd, *salt_to_use, 1, 0);
 
     return 0;
 }
 
 
+
 int main(int argc, char** argv) {
+    if (sodium_init() < 0)
+    {
+        fprintf(stderr, "Sodium Init error");
+    };
+
     get_timestmp();
     int arg_begin = 0;
     int valid = -1;
@@ -332,23 +317,58 @@ int main(int argc, char** argv) {
 
 //
 //
-//    unsigned char **salt  = (unsigned char**) malloc(sizeof(salt));
+
+
 //    unsigned char **out = (unsigned char**) malloc(sizeof(out));
-    unsigned char **salt;
-    unsigned char **out;
+    int hshslt_opt = 2;
+
     if (strcmp(func_arg, flags[HASH]) == 0) {
-        void *(*rando)() = opts[HASH];
+        void *(*rando_hsh)() = opts[HASH];
+
+        unsigned char *hashed_out[320];
+        *hashed_out = (unsigned char *) sodium_allocarray(320, sizeof(hashed_out));
+
+        unsigned char *salt[64];
+        *salt = (unsigned char*) sodium_allocarray(64,sizeof(salt));
+
+        mk_salt(salt, NULL, 0);
+
+        mk_hash_key(PWD, *salt, 0, 1);
+
+//        FILE* hashin;
+//        FILE* saltin;
+//
+//        hashin = fopen("key_out", "rb");
+//        unsigned char hashbuf[320];
+//
+//        fread(hashbuf,sizeof(hashbuf),1,hashin);
+//
+//        saltin =fopen("salt_out", "rb");
+//        unsigned char* saltbuf[64];
+//
+//        fread(saltbuf, sizeof(saltbuf),1,saltin);
+//
+//        unsigned char* genhash[320];
+//        mk_hash_key("aaaa", *saltbuf, *genhash, 0, 0);
+//
+//        if (sodium_memcmp(&hashed_out, &genhash,sizeof(hashbuf) )){
+//            printf("true");
+//        }
+//
+
+
+        goto opsdone;
     }
     else if (strcmp(func_arg, flags[CHSH]) == 0) {
-        void *(*rando)() = opts[CHSH];
-    }
+        void *(*rando_chkhsh)() = opts[CHSH];
 
+    }
 
 
     opsdone:
         return 0;
     //
-    // free(argv);
+
 
 
 }

@@ -11,20 +11,22 @@
 uint64_t rando_64(void);
 uint64_t rando_32(void);
 
-void* mk_salt(unsigned char* out[320],
-              const unsigned char* inp,
+void mk_salt(unsigned char* out[64],
+              const unsigned char* outp,
               int to_bytes);
 
-void* mk_hash_key(const char* to_be_hashed,
-                  unsigned char* salt_inst[64],
-                  unsigned char* hashed_out[320],
-                  int give_salt);
+void mk_hash_key(const char* to_be_hashed,
+                 unsigned char salt_inst[64],
+                  int give_salt,
+                 int tofile);
 
-void* to_file(unsigned char* salt[64],
-              unsigned char* hashed[320],
-              int opt);
+// opt 1 = salt (bytes), opt 2 = hashkey (bytes), opt 4 = hashkey (ascii)
+int to_file(unsigned char* salt,
+            unsigned char* hashed,
+            int opt);
 
-void* read_hash_in(const char** filename, unsigned char** hash_file_content, unsigned char** out_salt);
+
+void read_hash_in(const char** filename, unsigned char** hash_file_content, unsigned char** out_salt);
 
 int chk_hash(unsigned char* salt_to_use[64],
              unsigned char* hash_to_chk[320],
