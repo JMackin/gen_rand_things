@@ -5,7 +5,7 @@
 #ifndef GEN_RAND_THINGS_RAND_THINGS_H
 #define GEN_RAND_THINGS_RAND_THINGS_H
 
-#define OPT_ARR_LEN 7
+#define OPT_ARR_LEN 8
 
 
 uint64_t rando_64(void);
@@ -22,12 +22,12 @@ void mk_hash_key(const char* to_be_hashed,
 
 // opt 1 = salt (bytes), opt 2 = hashkey (bytes), opt 4 = hashkey (ascii)
 
-int to_file(unsigned char* salt,
-            unsigned char* hashed,
+int to_file(const unsigned char* salt,
+            const unsigned char* hashed,
             int opt);
 
 
-void read_hash_in(const char** filename, unsigned char** hash_file_content, unsigned char** out_salt);
+int read_hash_in(const char* salt_file_name, const char* hash_file_name, unsigned char* hash_file_content, unsigned char* salt_file_content);
 
 int chk_hash(unsigned char salt_to_use[64],
              unsigned char hash_to_chk[320],
@@ -54,7 +54,9 @@ enum Opt_Cmds {
         CHSH = 4, //Compare given password str to a hash value
                     // IN: hashchk <char* passwd>, <uint_64 hash[320]>, <uint64 salt[64]
                     // RET: int 0 - passed comparison check, int 1 - failed cmp chk
-        END = 5
+        MKKY = 6,
+
+        END = 7
 
 };
 

@@ -21,7 +21,7 @@
 
 uint64_t saltbytes;
 struct timeval tv;
-char* tm_str[sizeof tv.tv_sec];
+char tm_str[sizeof tv.tv_sec];
 
 
 void get_timestmp() {
@@ -32,12 +32,36 @@ void get_timestmp() {
 }
 
 // opt 1 = salt (bytes), opt 2 = hashkey (bytes), opt 4 = hashkey (ascii)
-int to_file(unsigned char *salt, unsigned char* hashed, int opt) {
+int to_file(const unsigned char salt[64u], const unsigned char hashed[320u], int opt) {
 
     FILE *sf_ptr;
     int opt_ch = opt<<1;
-    //char* filename = (char *) malloc(CHAR_MAX-16);
-    //char* filename[(sizeof("salt")+sizeof(tm_str))];
+    int i;
+
+    char* s_word = "salt_";
+    char* k_word = "hkey_";
+    char x;
+    char s_filename[(size_t)  strlen(s_word) + sizeof (tm_str)];
+    char k_filename[(size_t)  strlen(k_word) + sizeof (tm_str)];
+    int j = strlen(s_word);
+
+    for ( i = 0; i < strlen(s_word); i++)
+    {
+        s_filename[i] = *(s_word+i);
+        k_filename[i] = *(k_word+i);
+    }
+    for ( i = 0; i < sizeof(tm_str); i++)
+    {
+
+        x = tm_str[i];
+
+        s_filename[i+j] = x;
+        k_filename[i+j] = x;
+    }
+
+
+    //printf("Salt_file: %s", filename);
+
 
 decr:
     opt_ch = opt_ch>>1;
@@ -66,7 +90,7 @@ decr:
     //char* filen1[(sizeof("salt")+sizeof(tm_str))];
     //strcpy(*filename,"salt");
 
-        sf_ptr = fopen("salt_out", "wb");
+        sf_ptr = fopen(s_filename, "wb");
 
         if(sf_ptr == NULL)
         {
@@ -74,9 +98,19 @@ decr:
             exit(1);
         }
 
-        for (int i = 0; i < 64; i++){
-            fputc(*(salt+i), sf_ptr);
+        for ( i = 0; i < 64+sizeof(tm_str); i++){
+            if (i < sizeof(tm_str)*2){
+                fputc((i%2==0 ? *(salt+(i/2)) : (char) tm_str[((i+1)/2)-1]), sf_ptr);
+            }else
+            {
+                fputc(*(salt+(i-sizeof(tm_str))), sf_ptr);
+            }
         }
+
+//        for (i = 0; i < 64; i++) {
+//            fputc(*(salt+i), sf_ptr);
+//        }
+
 
         fclose(sf_ptr);
 
@@ -88,20 +122,29 @@ decr:
    // char* filen2[(sizeof("key")+sizeof(tm_str))];
     //strcpy((char *) filename, "key");
 
-        sf_ptr = fopen("key_out", "wb");
+        sf_ptr = fopen(k_filename, "wb");
 
         if(sf_ptr == NULL)
         {
             fprintf(stderr, "File-open Error");
         }
 
-        for (int i = 0; i < 320; i++){
-            fputc(*(hashed+i), sf_ptr);
+        for ( i = 0; i < 320+sizeof(tm_str); i++){
+            if (i < sizeof(tm_str)*2){
+                fputc((i%2==0 ? *(hashed+(i/2)) : (char) tm_str[((i+1)/2)-1]), sf_ptr);
+            }else
+            {
+                fputc(*(hashed+(i-sizeof(tm_str))), sf_ptr);
+            }
         }
+
+//        for ( i = 0; i < 320; i++){
+//            fputc(*(hashed+i), sf_ptr);
+//        }
 
         fclose(sf_ptr);
 
-       // sf_ptr = fopen(*filename, "rb");
+        // sf_ptr = fopen(*filename, "rb");
         //fflush(sf_ptr);
         goto decr;
 
@@ -120,15 +163,6 @@ void mk_hash_key(const char* to_be_hashed, unsigned char salt_inst[64u], unsigne
     if (give_salt == 0) {
         mk_salt(salt_inst, NULL, 0);
     }
-
-//    unsigned long long passlen = strlen(to_be_hashed);
-//    unsigned long long outlen = crypto_box_SEEDBYTES;
-
-    // Salt+Password
-//
-//    unsigned char salt[crypto_pwhash_SALTBYTES];
-    //randombytes_buf(salt, sizeof salt);
-
 
 
     if (crypto_pwhash(hashed_out,
@@ -193,10 +227,10 @@ uint64_t rando_32(void) {
 
     printf("> %s", buff);
     scanf("%[a-d]s", buff);
-    printf("%s\n\n", buff);
+    //printf("%s\n\n", buff);
     uint32_t rnd_byts = randombytes_random();
-    printf("%u\n", rnd_byts);
-    printf("%u\n", clck);
+    //printf("%u\n", rnd_byts);
+    //printf("%u\n", clck);
 
     rnd_byts = (rnd_byts ^ clck);
 
@@ -215,10 +249,10 @@ uint64_t rando_64(void) {
     printf(">\n");
     fflush(stdout);
     scanf("%[a-d]s", buff);
-    printf("%s\n\n", buff);
+    //printf("%s\n\n", buff);
     uint64_t rnd_byts = (randombytes_random() * 2) << 16;
-    printf("%lu\n", rnd_byts);
-    printf("%lu\n", clck);
+    //printf("%lu\n", rnd_byts);
+   // printf("%lu\n", clck);
 
     rnd_byts = (rnd_byts ^ clck);
 
@@ -228,8 +262,87 @@ uint64_t rando_64(void) {
     return rnd_byts;
 }
 
-void read_hash_in(const char** filename, unsigned char** hash_file_content, unsigned char** out_salt) {
+int read_hash_in(const char* salt_file_name, const char* hash_file_name, unsigned char* hash_file_content, unsigned char* salt_file_content) {
 
+    int i;
+    FILE* hash_file;
+    FILE* salt_file;
+    char ts_id_a[8];
+    char ts_id_b[8];
+    unsigned char c_buf;
+
+    salt_file = fopen(salt_file_name, "rb");
+
+    for (i = 0; i < 72; i++){
+        c_buf = fgetc(salt_file);
+        if (i < 16){
+             i%2==0 ? (*(salt_file_content+(i/2)) = c_buf) : (ts_id_a[ (((i+1)/2)-1) ] = (char) c_buf);
+        }
+    }
+
+    fclose(salt_file);
+
+
+    hash_file = fopen(hash_file_name, "rb");
+
+    for (i = 0; i < 328; i++){
+        c_buf = fgetc(hash_file);
+        if (i < 16){
+            i%2==0 ? (hash_file_content[i/2] = c_buf) : (ts_id_b[ (((i+1)/2)-1) ] = (char) c_buf);
+        }
+        else {
+            hash_file_content[i-8] = c_buf;
+        }
+    }
+
+    fclose(hash_file);
+
+
+    int id_match = 0;
+    for (i = 0; i < 8; i++)
+    {
+        if (ts_id_a[i] != ts_id_b[i]) {
+            id_match = 1;
+            break;
+        }
+    }
+
+
+
+/*    printf("RESULT\nhash_file:\n");
+
+    if (id_match == 0) {
+        for (i = 0; i < 320; i++)
+        {
+            printf("%c", hash_file_content[i]);
+        }
+        printf("\nsalt_file:\n");
+        for (i = 0; i < 64; i++)
+        {
+            printf("%c", salt_file_content[i]);
+        }
+        printf("\nts_id:\n");
+        for (i = 0; i < sizeof(ts_id_a); i++)
+        {
+            printf("%c", ts_id_b[i]);
+        }
+    }*/
+
+
+    /*
+    for ( i = 0; i < 320+sizeof(tm_str); i++){
+        if (i < sizeof(tm_str)*2){
+            fputc((i%2==0 ? *(hashed+(i/2)) : (char) tm_str[((i+1)/2)-1]), sf_ptr);
+        }else
+        {
+            fputc(*(hashed+(i-sizeof(tm_str))), sf_ptr);
+        }
+    }
+    */
+
+    //hash_file = fopen()
+
+    /*
     char* file_path[strlen("./") + strlen(*filename)];
     strcpy(*file_path, "./");
     strcat(*file_path, *filename);
@@ -271,7 +384,7 @@ void read_hash_in(const char** filename, unsigned char** hash_file_content, unsi
 
         }
     }
-
+*/
 }
 
 
@@ -293,11 +406,12 @@ int main(int argc, char** argv) {
     get_timestmp();
     int arg_begin = 0;
     int valid = -1;
+    int flag = 0, cnt = 0;
     char* result_out;
     char* func_arg;
-    char* flags[OPT_ARR_LEN] = {"-h" ,"-r32","-r64","-f","-s","-chk", NULL};
-    enum Opt_Cmds optCmds[OPT_ARR_LEN] = {HASH,RNDA,RNDB,TOFI,CHSH, END};
-    void *opts [OPT_ARR_LEN] = { &mk_hash_key, &rando_32, &rando_64, &to_file, &chk_hash, NULL};
+    char* flags[OPT_ARR_LEN] = {"-h" ,"-r","-R","-f","-c","-k", NULL};
+    enum Opt_Cmds optCmds[OPT_ARR_LEN] = {HASH,RNDA,RNDB,TOFI,CHSH,MKKY,END};
+    void *opts [OPT_ARR_LEN] = { &mk_hash_key, &rando_32, &rando_64, &to_file, &chk_hash,&mk_hash_key, NULL};
 
 
     if (argc > 1) {
@@ -307,78 +421,76 @@ int main(int argc, char** argv) {
                 arg_begin = i+1;
                 break;
             }
-
         }
-        func_arg = (char*) malloc(sizeof(argv[arg_begin]));
-        strcpy(func_arg, argv[arg_begin]);
+
     } else {
         fprintf(stderr, "No commands Provided");
         return 1;
     }
 
+    func_arg = (char*) malloc(sizeof(argv[arg_begin]));
+    strcpy(func_arg, argv[arg_begin]);
 
-    if (strcmp(func_arg, flags[RNDA]) == 0) {
+    while (optCmds[cnt] != END){
+        if (strcmp(func_arg, flags[cnt]) == 0) {
+            flag = cnt;
+            valid = 0;
+            break;
+        }
+        else {
+            cnt++;
+        }
+    }
+
+
+    if (valid != 0) {
+        printf("Invalid option: %s", func_arg);
+        return 1;
+    }
+
+
+    if (flag == RNDA) {
         uint32_t *(*rando)() = opts[RNDA];
-        *rando(NULL);
+        *rando();
         goto opsdone;
     }
-    else if (strcmp(func_arg, flags[RNDB]) == 0) {
+    else if (flag == RNDB) {
         uint64_t *(*rando)() = opts[RNDB];
-        *rando(NULL);
+        *rando();
         goto opsdone;
     }
 
-//
-//
 
-
-//    unsigned char **out = (unsigned char**) malloc(sizeof(out));
-    int hshslt_opt = 2;
-
-    if (strcmp(func_arg, flags[HASH]) == 0) {
-        void *(*rando_hsh)() = opts[HASH];
+    if (flag == HASH) {
+        //void *(*rando_hsh)() = opts[HASH];
 
         unsigned char* hashed_out;
         hashed_out = (unsigned char *) sodium_allocarray(320, sizeof(*hashed_out));
-
         unsigned char* salt;
         salt = (unsigned char *) sodium_allocarray(64, sizeof(*salt));
 
         mk_hash_key(PWD, salt, hashed_out, 0, 1);
 
-
-        FILE* hashin;
-        FILE* saltin;
-
-        hashin = fopen("key_out", "rb");
-        unsigned char hashbuf[320];
-
-        fread(hashbuf,sizeof(hashbuf),1,hashin);
-
-        saltin =fopen("salt_out", "rb");
-        unsigned char saltbuf[64];
-
-        fread(saltbuf, sizeof(saltbuf),1,saltin);
-
-        unsigned char genhash[320];
-        mk_hash_key(PWD, saltbuf, genhash, 1, 0);
-
-        char* newpwd = "12342";
-
-        printf("%d", sodium_memcmp(genhash,hashbuf,sizeof(hashbuf)));
-
+        sodium_free(hashed_out);
+        sodium_free(salt);
 
         goto opsdone;
     }
 
-    else if (strcmp(func_arg, flags[CHSH]) == 0) {
-        void *(*rando_chkhsh)() = opts[CHSH];
+    else if (flag == CHSH) {
+        //void *(*rando_chkhsh)() = opts[CHSH];
+        unsigned char* hashed_out;
+        hashed_out = (unsigned char *) sodium_allocarray(320, sizeof(*hashed_out));
+        unsigned char* salt;
+        salt = (unsigned char *) sodium_allocarray(64, sizeof(*salt));
+
+        read_hash_in("salt_16900556U","hkey_16900556U",hashed_out,salt);
 
     }
 
 
     opsdone:
-
+        free(func_arg);
         return 0;
     //
 
