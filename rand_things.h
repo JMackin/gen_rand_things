@@ -27,14 +27,16 @@ int to_file(const unsigned char* salt,
             int opt);
 
 
-int read_hash_in(const char* salt_file_name, const char* hash_file_name, unsigned char* hash_file_content, unsigned char* salt_file_content);
+int read_hash_in(char id[8],
+                 unsigned char* hash_file_content,
+                 unsigned char* salt_file_content);
 
 int chk_hash(unsigned char salt_to_use[64],
              unsigned char hash_to_chk[320],
              const char* passwd);
 
 
-
+char* nav_dirs(int dir_flag);
 
 
 enum Opt_Cmds {

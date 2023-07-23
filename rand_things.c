@@ -1,28 +1,59 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <termios.h>
 #include <sys/time.h>
 #include <time.h>
 #include <string.h>
 #include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "libsodium-1.0.18/src/libsodium/include/sodium.h"
 #include "rand_things.h"
 
 #define PWD "suchagoodpasswowrd"
+
 #define KEY_LEN crypto_box_SEEDBYTES
 #define OPSLIMIT_JLMMECHA 10U // 10 ops
 #define MEMLIMIT_JLMMECHA 32000000000U //32 GB
 #define OPSLIMIT_ENIGMECHA 10U // 10 ops
 #define MEMLIMIT_ENIGMECHA 1000000000U //1 GB
-#define OUTPUT_DIR_KEY_FILE "./.key"
-#define OUTPUT_DIR_SALT_FILE "./.salt"
-#define SALT_TABLE_FILE "./.salt_hash_table"
+#define OUTPUT_DIR_KEY_FILE ".hkeys"
+#define OUTPUT_DIR_SALT_FILE ".salts"
 
 
-
-
-uint64_t saltbytes;
 struct timeval tv;
+
 char tm_str[sizeof tv.tv_sec];
 
+
+int recv_pwd(unsigned char pwd_in[100], int opt) {
+
+    struct termios termInfo;
+
+    unsigned char* pwd_buf = sodium_allocarray(100,sizeof(char));
+    sodium_mlock(pwd_buf,100);
+    char i = 0;
+    int cnt = 0;
+    printf("\n\nPassword: ");
+
+    while (i != '\n')
+    {
+                scanf("%c",&i);
+        putc('*', stdout);
+        if (i != '\n') {
+            pwd_buf[cnt] = i;
+            cnt++;
+        }
+
+    }
+
+    for (int j = 0; j < cnt; j++){
+        pwd_in[i] = pwd_buf[i];
+    }
+    sodium_munlock(pwd_buf,100);
+    sodium_free(pwd_buf);
+    return 0;
+}
 
 void get_timestmp() {
 
@@ -31,18 +62,67 @@ void get_timestmp() {
 
 }
 
+//dir_flag: 0=home_dir, 1=cwd, 2=salt_dir, 3=key_dir
+char* nav_dirs(int dir_flag){
+
+    char* refd_dir;
+    char* ret_dir_path;
+    int v;
+    char* var_mark[5] = {"HOME", "PWD", "/.salts", "/.hkeys", "HOSTNAME"};
+
+    v = ((dir_flag > -1 & dir_flag < 4) ? dir_flag : -1);
+
+    switch (v) {
+        case (-1):
+            fprintf(stderr, "\nInvalid directory flag\n");
+            ret_dir_path = NULL;
+            return NULL;
+        case (0):
+        case (1):
+            refd_dir = getenv(var_mark[v]);
+            if (refd_dir != NULL) {
+                ret_dir_path = (char *) malloc(strlen(refd_dir));
+                strcpy(ret_dir_path, refd_dir);
+                return ret_dir_path;
+            } else {
+                fprintf(stderr, "\nCouldn't get environment variable %s\n", var_mark[v]);
+                ret_dir_path = ".";
+                return NULL;
+            }
+        case (2):
+        case (3):
+            refd_dir = nav_dirs(0);
+            if (refd_dir == NULL) {
+                fprintf(stderr, "\nCouldnt assign %s dir\n", var_mark[v]);
+                return NULL;
+            }
+            ret_dir_path = (char *) malloc(strlen(refd_dir) + strlen(var_mark[v]));
+            strcpy(ret_dir_path, refd_dir);
+            free(refd_dir);
+            strcat(ret_dir_path, var_mark[v]);
+            return ret_dir_path;
+        default:
+            fprintf(stderr, "Invalid case %d", v);
+            return NULL;
+    }
+
+
+}
+
+
 // opt 1 = salt (bytes), opt 2 = hashkey (bytes), opt 4 = hashkey (ascii)
 int to_file(const unsigned char salt[64u], const unsigned char hashed[320u], int opt) {
 
     FILE *sf_ptr;
+
     int opt_ch = opt<<1;
     int i;
 
     char* s_word = "salt_";
     char* k_word = "hkey_";
     char x;
-    char s_filename[(size_t)  strlen(s_word) + sizeof (tm_str)];
-    char k_filename[(size_t)  strlen(k_word) + sizeof (tm_str)];
+    char s_filename[(size_t)  strlen(s_word) + strlen(tm_str)];
+    char k_filename[(size_t)  strlen(k_word) + strlen(tm_str)];
     int j = strlen(s_word);
 
     for ( i = 0; i < strlen(s_word); i++)
@@ -50,7 +130,7 @@ int to_file(const unsigned char salt[64u], const unsigned char hashed[320u], int
         s_filename[i] = *(s_word+i);
         k_filename[i] = *(k_word+i);
     }
-    for ( i = 0; i < sizeof(tm_str); i++)
+    for ( i = 0; i < strlen(tm_str); i++)
     {
 
         x = tm_str[i];
@@ -90,6 +170,7 @@ decr:
     //char* filen1[(sizeof("salt")+sizeof(tm_str))];
     //strcpy(*filename,"salt");
 
+        chdir(nav_dirs(2));
         sf_ptr = fopen(s_filename, "wb");
 
         if(sf_ptr == NULL)
@@ -98,12 +179,12 @@ decr:
             exit(1);
         }
 
-        for ( i = 0; i < 64+sizeof(tm_str); i++){
-            if (i < sizeof(tm_str)*2){
+        for ( i = 0; i < 64+strlen(tm_str); i++){
+            if (i < strlen(tm_str)*2){
                 fputc((i%2==0 ? *(salt+(i/2)) : (char) tm_str[((i+1)/2)-1]), sf_ptr);
             }else
             {
-                fputc(*(salt+(i-sizeof(tm_str))), sf_ptr);
+                fputc(*(salt+(i-strlen(tm_str))), sf_ptr);
             }
         }
 
@@ -118,7 +199,7 @@ decr:
 
 
     hshkey_out:
-
+    chdir(nav_dirs(3));
    // char* filen2[(sizeof("key")+sizeof(tm_str))];
     //strcpy((char *) filename, "key");
 
@@ -129,12 +210,12 @@ decr:
             fprintf(stderr, "File-open Error");
         }
 
-        for ( i = 0; i < 320+sizeof(tm_str); i++){
-            if (i < sizeof(tm_str)*2){
+        for ( i = 0; i < 320+strlen(tm_str); i++){
+            if (i < strlen(tm_str)*2){
                 fputc((i%2==0 ? *(hashed+(i/2)) : (char) tm_str[((i+1)/2)-1]), sf_ptr);
             }else
             {
-                fputc(*(hashed+(i-sizeof(tm_str))), sf_ptr);
+                fputc(*(hashed+(i-strlen(tm_str))), sf_ptr);
             }
         }
 
@@ -164,7 +245,6 @@ void mk_hash_key(const char* to_be_hashed, unsigned char salt_inst[64u], unsigne
         mk_salt(salt_inst, NULL, 0);
     }
 
-
     if (crypto_pwhash(hashed_out,
                       sizeof *hashed_out*320 ,
                       to_be_hashed,
@@ -177,6 +257,7 @@ void mk_hash_key(const char* to_be_hashed, unsigned char salt_inst[64u], unsigne
         exit(1);
 
     }
+
     if (tofile == 1) {
         to_file(salt_inst, hashed_out, 4);
     } else
@@ -187,6 +268,8 @@ void mk_hash_key(const char* to_be_hashed, unsigned char salt_inst[64u], unsigne
 }
 
 void mk_salt(unsigned char salt[64], const unsigned char* inp, int to_bytes) {
+
+    uint64_t saltbytes;
 
     if (inp != NULL && to_bytes == 1) {
 
@@ -262,131 +345,84 @@ uint64_t rando_64(void) {
     return rnd_byts;
 }
 
-int read_hash_in(const char* salt_file_name, const char* hash_file_name, unsigned char* hash_file_content, unsigned char* salt_file_content) {
+int read_hash_in(char id[10] , unsigned char hash_file_content[320u], unsigned char salt_file_content[64u]) {
 
     int i;
     FILE* hash_file;
     FILE* salt_file;
-    char ts_id_a[8];
-    char ts_id_b[8];
+    char ts_id_a[10];
+    char ts_id_b[10];
     unsigned char c_buf;
+
+    char* saltdir_path = nav_dirs(2);
+    chdir(saltdir_path);
+    char* salt_file_name = malloc(strlen(saltdir_path) + strlen("/salt_")+ strlen(id));
+
+    strcpy(salt_file_name,saltdir_path);
+    strcat(salt_file_name,"/salt_");
+    strcat(salt_file_name,id);
+
 
     salt_file = fopen(salt_file_name, "rb");
 
-    for (i = 0; i < 72; i++){
+    for (i = 0; i < 74; i++){
         c_buf = fgetc(salt_file);
-        if (i < 16){
-             i%2==0 ? (*(salt_file_content+(i/2)) = c_buf) : (ts_id_a[ (((i+1)/2)-1) ] = (char) c_buf);
+        if (i < 20){
+             i%2==0 ? (salt_file_content[i/2] = c_buf) : (ts_id_a[ (((i+1)/2)-1) ] = (char) c_buf);
+        }
+        else {
+            salt_file_content[i-10] = c_buf;
         }
     }
 
     fclose(salt_file);
+    free(salt_file_name);
 
 
-    hash_file = fopen(hash_file_name, "rb");
+    char* hkeydir_path = nav_dirs(3);
+    chdir(hkeydir_path);
+    char* hkey_file_name = malloc(strlen(hkeydir_path) + strlen("/hkey_") + strlen(id));
 
-    for (i = 0; i < 328; i++){
+    strcpy(hkey_file_name,hkeydir_path);
+    strcat(hkey_file_name,"/hkey_");
+    strcat(hkey_file_name,id);
+
+    hash_file = fopen(hkey_file_name, "rb");
+
+    for (i = 0; i < 330; i++){
         c_buf = fgetc(hash_file);
-        if (i < 16){
+        if (i < 20){
             i%2==0 ? (hash_file_content[i/2] = c_buf) : (ts_id_b[ (((i+1)/2)-1) ] = (char) c_buf);
         }
         else {
-            hash_file_content[i-8] = c_buf;
+            hash_file_content[i-10] = c_buf;
         }
     }
 
     fclose(hash_file);
+    free(hkey_file_name);
 
 
     int id_match = 0;
-    for (i = 0; i < 8; i++)
+    for (i = 0; i < 10; i++)
     {
-        if (ts_id_a[i] != ts_id_b[i]) {
-            id_match = 1;
+        if ((ts_id_a[i]) != (ts_id_b[i])) {
+            id_match = i+1;
             break;
         }
     }
 
 
-
-/*    printf("RESULT\nhash_file:\n");
-
-    if (id_match == 0) {
-        for (i = 0; i < 320; i++)
-        {
-            printf("%c", hash_file_content[i]);
-        }
-        printf("\nsalt_file:\n");
-        for (i = 0; i < 64; i++)
-        {
-            printf("%c", salt_file_content[i]);
-        }
-        printf("\nts_id:\n");
-        for (i = 0; i < sizeof(ts_id_a); i++)
-        {
-            printf("%c", ts_id_b[i]);
-        }
-    }*/
-
-
-    /*
-    for ( i = 0; i < 320+sizeof(tm_str); i++){
-        if (i < sizeof(tm_str)*2){
-            fputc((i%2==0 ? *(hashed+(i/2)) : (char) tm_str[((i+1)/2)-1]), sf_ptr);
-        }else
-        {
-            fputc(*(hashed+(i-sizeof(tm_str))), sf_ptr);
-        }
-    }
-    */
-
-    //hash_file = fopen()
-
-    /*
-    char* file_path[strlen("./") + strlen(*filename)];
-    strcpy(*file_path, "./");
-    strcat(*file_path, *filename);
-
-    FILE* file_in = fopen(*file_path, "r");
-
-    while (!feof(file_in))
+    if (id_match != 0) {
+        fprintf(stderr, "Extracted salt and hash ids mismatched at index %d", (id_match-1));
+        return (id_match);
+    }else
     {
-        **hash_file_content = fgetc(file_in);
+        printf("\nID: %s\n",ts_id_a);
+        return 0;
     }
-    fflush(file_in);
-    fclose(file_in);
 
-    file_in = fopen(SALT_TABLE_FILE, "r");
-    unsigned char** hash_buff = (unsigned char**) sodium_allocarray(320, sizeof **hash_file_content);
-
-    int cnt = 0;
-    unsigned char cbuf;
-
-    while (!feof(file_in))
-    {
-
-        cbuf = fgetc(file_in);
-        if (cnt % 2 == 0) {
-            if (cbuf == '\n') {
-                cnt++;
-                if (*out_salt == *hash_buff) {
-                    break;
-                }
-                else {
-                    sodium_memzero(hash_buff, sizeof(*hash_buff));
-                }//
-            } //If cur char is \n
-            else {
-                **hash_buff = fgetc(file_in);;
-            }
-        }
-        else {
-
-        }
-    }
-*/
 }
-
 
 int chk_hash(unsigned char salt_to_use[64], unsigned char hash_to_chk[320],  const char* passwd)
 {
@@ -466,10 +502,14 @@ int main(int argc, char** argv) {
 
         unsigned char* hashed_out;
         hashed_out = (unsigned char *) sodium_allocarray(320, sizeof(*hashed_out));
+
         unsigned char* salt;
         salt = (unsigned char *) sodium_allocarray(64, sizeof(*salt));
 
-        mk_hash_key(PWD, salt, hashed_out, 0, 1);
+        mk_hash_key(, salt, hashed_out, 0, 1);
+
+        sodium_memzero(hashed_out, 320);
+        sodium_memzero(hashed_out, 64);
 
         sodium_free(hashed_out);
         sodium_free(salt);
@@ -479,12 +519,43 @@ int main(int argc, char** argv) {
 
     else if (flag == CHSH) {
         //void *(*rando_chkhsh)() = opts[CHSH];
+
+        if (argv[arg_begin+1] && strlen(argv[arg_begin+1]) == 10) {
+            func_arg = realloc(func_arg, sizeof argv[arg_begin+1]);
+        }
+        else {
+            fprintf(stderr, "\n Invalid ID argument \n");
+            return 1;
+        }
+
+        strcpy(func_arg,argv[arg_begin+1]);
+        if (!func_arg){
+            fprintf(stderr, "\nReallocation for 2nd argument failed\n");
+            return 1;
+        }
+
         unsigned char* hashed_out;
         hashed_out = (unsigned char *) sodium_allocarray(320, sizeof(*hashed_out));
         unsigned char* salt;
         salt = (unsigned char *) sodium_allocarray(64, sizeof(*salt));
 
-        read_hash_in("salt_16900556U","hkey_16900556U",hashed_out,salt);
+        read_hash_in(func_arg,hashed_out,salt);
+
+        sodium_mlock(hashed_out, 320);
+
+
+
+
+        sodium_munlock(hashed_out, 320);
+
+        sodium_free(hashed_out);
+        sodium_free(salt);
+
+
+
+
+
+        goto opsdone;
 
     }
 
