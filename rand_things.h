@@ -16,6 +16,7 @@ void mk_salt(unsigned char salt[64],
              int to_bytes);
 
 void mk_hash_key(const char* to_be_hashed,
+                 int to_be_hsh_len,
                  unsigned char salt_inst[64], unsigned char hashed_out[320u],
                   int give_salt,
                  int tofile);
@@ -24,7 +25,8 @@ void mk_hash_key(const char* to_be_hashed,
 
 int to_file(const unsigned char* salt,
             const unsigned char* hashed,
-            int opt);
+            int opt,
+            int out_type);
 
 
 int read_hash_in(char id[8],
@@ -33,7 +35,8 @@ int read_hash_in(char id[8],
 
 int chk_hash(unsigned char salt_to_use[64],
              unsigned char hash_to_chk[320],
-             const char* passwd);
+             const char* passwd,
+             int pwd_len);
 
 
 char* nav_dirs(int dir_flag);

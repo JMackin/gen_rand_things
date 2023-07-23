@@ -26,33 +26,40 @@ struct timeval tv;
 char tm_str[sizeof tv.tv_sec];
 
 
-int recv_pwd(unsigned char pwd_in[100], int opt) {
+char* recv_pwd(char* pwd_in, int opt, int* p_cnt) {
 
-    struct termios termInfo;
 
-    unsigned char* pwd_buf = sodium_allocarray(100,sizeof(char));
+    char* pwd_buf = sodium_allocarray(100,sizeof(char));
     sodium_mlock(pwd_buf,100);
+
     char i = 0;
-    int cnt = 0;
+    int j, cnt = 0 ;
     printf("\n\nPassword: ");
+
 
     while (i != '\n')
     {
-                scanf("%c",&i);
+        i = getc(stdin);
+        fflush(stdin);
         putc('*', stdout);
         if (i != '\n') {
-            pwd_buf[cnt] = i;
-            cnt++;
+            (pwd_buf[cnt]) = i;
+            (cnt)++;
         }
-
     }
 
-    for (int j = 0; j < cnt; j++){
-        pwd_in[i] = pwd_buf[i];
+
+    pwd_in = (char*) sodium_allocarray(cnt,sizeof(char));
+    sodium_mlock(pwd_in, cnt);
+    for (j = 0; j < cnt; j++) {
+        pwd_in[j] = pwd_buf[j];
     }
+    *p_cnt = cnt;
+
     sodium_munlock(pwd_buf,100);
     sodium_free(pwd_buf);
-    return 0;
+    return pwd_in;
+
 }
 
 void get_timestmp() {
@@ -111,15 +118,16 @@ char* nav_dirs(int dir_flag){
 
 
 // opt 1 = salt (bytes), opt 2 = hashkey (bytes), opt 4 = hashkey (ascii)
-int to_file(const unsigned char salt[64u], const unsigned char hashed[320u], int opt) {
+int to_file(const unsigned char salt[64u], const unsigned char hashed[320u], int opt, int out_type) {
 
     FILE *sf_ptr;
 
     int opt_ch = opt<<1;
     int i;
 
-    char* s_word = "salt_";
-    char* k_word = "hkey_";
+
+    char* s_word = (out_type==0) ? "salt_" : "saltB_";
+    char* k_word = (out_type==0) ? "hkey_" : "hkeyB_";
     char x;
     char s_filename[(size_t)  strlen(s_word) + strlen(tm_str)];
     char k_filename[(size_t)  strlen(k_word) + strlen(tm_str)];
@@ -238,7 +246,7 @@ decr:
 
 }
 
-void mk_hash_key(const char* to_be_hashed, unsigned char salt_inst[64u], unsigned char hashed_out[320u],  int give_salt, int tofile) {
+void mk_hash_key(const char* to_be_hashed, int to_be_hsh_len, unsigned char salt_inst[64u], unsigned char hashed_out[320u],  int give_salt, int tofile) {
 
 
     if (give_salt == 0) {
@@ -248,7 +256,7 @@ void mk_hash_key(const char* to_be_hashed, unsigned char salt_inst[64u], unsigne
     if (crypto_pwhash(hashed_out,
                       sizeof *hashed_out*320 ,
                       to_be_hashed,
-                      strlen(to_be_hashed),
+                      to_be_hsh_len,
                       salt_inst,
                       crypto_pwhash_OPSLIMIT_SENSITIVE,
                       crypto_pwhash_MEMLIMIT_SENSITIVE,
@@ -259,10 +267,7 @@ void mk_hash_key(const char* to_be_hashed, unsigned char salt_inst[64u], unsigne
     }
 
     if (tofile == 1) {
-        to_file(salt_inst, hashed_out, 4);
-    } else
-    {
-
+        to_file(salt_inst, hashed_out, 4, 0);
     }
 
 }
@@ -424,14 +429,27 @@ int read_hash_in(char id[10] , unsigned char hash_file_content[320u], unsigned c
 
 }
 
-int chk_hash(unsigned char salt_to_use[64], unsigned char hash_to_chk[320],  const char* passwd)
+int chk_hash(unsigned char salt_to_use[64], unsigned char hash_to_chk[320],  const char* passwd, int pwd_len)
 {
-    mk_hash_key(passwd, salt_to_use, hash_to_chk, 1, 0);
+    int chk = 0;
+    int i;
+    unsigned char* res_hash = sodium_allocarray(320, sizeof(*res_hash));
+    sodium_mlock(res_hash, 320);
 
-    return 0;
+    mk_hash_key(passwd, pwd_len, salt_to_use, res_hash, 1, 0);
+
+    for (i = 0; i < 320; i++)
+    {
+        if (sodium_compare((res_hash+i),hash_to_chk+i,sizeof(*(res_hash+i))) != 0) {
+            chk = 1;
+            break;
+        }
+    }
+
+    (chk == 0) ? printf("\nCheck OK\n") : fprintf(stderr, "\nCheck failed at byte: %d\n", i);
+
+    return chk;
 }
-
-
 
 int main(int argc, char** argv) {
     if (sodium_init() < 0)
@@ -506,7 +524,7 @@ int main(int argc, char** argv) {
         unsigned char* salt;
         salt = (unsigned char *) sodium_allocarray(64, sizeof(*salt));
 
-        mk_hash_key(, salt, hashed_out, 0, 1);
+        mk_hash_key(PWD, strlen(PWD), salt, hashed_out, 0, 1);
 
         sodium_memzero(hashed_out, 320);
         sodium_memzero(hashed_out, 64);
@@ -541,24 +559,32 @@ int main(int argc, char** argv) {
 
         read_hash_in(func_arg,hashed_out,salt);
 
-        sodium_mlock(hashed_out, 320);
+        char* pwd_in;
+        int pw_cnt =0;
+        pwd_in = recv_pwd(pwd_in, 0, &pw_cnt);
+
+        if (chk_hash(salt, hashed_out, pwd_in, pw_cnt) != 0)
+        {
+            sodium_munlock(pwd_in, pw_cnt);
+            sodium_free(pwd_in);
+            sodium_free(hashed_out);
+            sodium_free(salt);
+            goto opsdone;
+        } else {
+            printf( "\nGood!\n");
+        }
 
 
 
-
-        sodium_munlock(hashed_out, 320);
-
+        sodium_munlock(pwd_in, pw_cnt);
+        sodium_free(pwd_in);
         sodium_free(hashed_out);
         sodium_free(salt);
-
-
-
 
 
         goto opsdone;
 
     }
-
 
     opsdone:
         free(func_arg);
