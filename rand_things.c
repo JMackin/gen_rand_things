@@ -118,11 +118,11 @@ char* nav_dirs(int dir_flag){
 
 
 // opt 1 = salt (bytes), opt 2 = hashkey (bytes), opt 4 = hashkey (ascii)
-int to_file(const unsigned char salt[64u], const unsigned char hashed[320u], int opt, int out_type) {
+int to_file(const unsigned char salt[64u], const unsigned char hashed[320u], int opt_ch, int out_type) {
 
     FILE *sf_ptr;
 
-    int opt_ch = opt<<1;
+    //int opt_ch = opt<<1;
     int i;
 
 
@@ -151,100 +151,91 @@ int to_file(const unsigned char salt[64u], const unsigned char hashed[320u], int
     //printf("Salt_file: %s", filename);
 
 
-decr:
-    opt_ch = opt_ch>>1;
+    //opt_ch = opt_ch>>1;
 
-    switch (opt_ch) {
-        case 8:
+
+    while (opt_ch > 1) {
+        printf("--%d\n", opt_ch);
+
+        if (opt_ch == 2) {
+
+            salt_out:
+
+            //char* filen1[(sizeof("salt")+sizeof(tm_str))];
+            //strcpy(*filename,"salt");
+
+            chdir(nav_dirs(2));
+            sf_ptr = fopen(s_filename, "wb");
+
+            if (sf_ptr == NULL) {
+                printf("Error!");
+                exit(1);
+            }
+
+            for (i = 0; i < 64 + strlen(tm_str); i++) {
+                if (i < strlen(tm_str) * 2) {
+                    fputc((i % 2 == 0 ? *(salt + (i / 2)) : (char) tm_str[((i + 1) / 2) - 1]), sf_ptr);
+                } else {
+                    fputc(*(salt + (i - strlen(tm_str))), sf_ptr);
+                }
+            }
+
+            //        for (i = 0; i < 64; i++) {
+            //            fputc(*(salt+i), sf_ptr);
+            //        }
+
+
+            fclose(sf_ptr);
+
             opt_ch = opt_ch>>1;
-            goto hshstr_out;
+            continue;
+        }//opt==2
 
-        case 4:
-            goto hshkey_out;
+            hshkey_out:
+        if (opt_ch == 4) {
 
-        case 2:
-            goto salt_out;
+            chdir(nav_dirs(3));
+            // char* filen2[(sizeof("key")+sizeof(tm_str))];
+            //strcpy((char *) filename, "key");
 
-        case 1:
-            return 0;
+            sf_ptr = fopen(k_filename, "wb");
 
-        default:
-            return 1;
-    }
-
-
-    salt_out:
-
-    //char* filen1[(sizeof("salt")+sizeof(tm_str))];
-    //strcpy(*filename,"salt");
-
-        chdir(nav_dirs(2));
-        sf_ptr = fopen(s_filename, "wb");
-
-        if(sf_ptr == NULL)
-        {
-            printf("Error!");
-            exit(1);
-        }
-
-        for ( i = 0; i < 64+strlen(tm_str); i++){
-            if (i < strlen(tm_str)*2){
-                fputc((i%2==0 ? *(salt+(i/2)) : (char) tm_str[((i+1)/2)-1]), sf_ptr);
-            }else
-            {
-                fputc(*(salt+(i-strlen(tm_str))), sf_ptr);
+            if (sf_ptr == NULL) {
+                fprintf(stderr, "File-open Error");
             }
-        }
 
-//        for (i = 0; i < 64; i++) {
-//            fputc(*(salt+i), sf_ptr);
-//        }
-
-
-        fclose(sf_ptr);
-
-        goto decr;
-
-
-    hshkey_out:
-    chdir(nav_dirs(3));
-   // char* filen2[(sizeof("key")+sizeof(tm_str))];
-    //strcpy((char *) filename, "key");
-
-        sf_ptr = fopen(k_filename, "wb");
-
-        if(sf_ptr == NULL)
-        {
-            fprintf(stderr, "File-open Error");
-        }
-
-        for ( i = 0; i < 320+strlen(tm_str); i++){
-            if (i < strlen(tm_str)*2){
-                fputc((i%2==0 ? *(hashed+(i/2)) : (char) tm_str[((i+1)/2)-1]), sf_ptr);
-            }else
-            {
-                fputc(*(hashed+(i-strlen(tm_str))), sf_ptr);
+            for (i = 0; i < 320 + strlen(tm_str); i++) {
+                if (i < strlen(tm_str) * 2) {
+                    fputc((i % 2 == 0 ? *(hashed + (i / 2)) : (char) tm_str[((i + 1) / 2) - 1]), sf_ptr);
+                } else {
+                    fputc(*(hashed + (i - strlen(tm_str))), sf_ptr);
+                }
             }
-        }
 
-//        for ( i = 0; i < 320; i++){
-//            fputc(*(hashed+i), sf_ptr);
-//        }
+            //        for ( i = 0; i < 320; i++){
+            //            fputc(*(hashed+i), sf_ptr);
+            //        }
 
-        fclose(sf_ptr);
+            fclose(sf_ptr);
 
-        // sf_ptr = fopen(*filename, "rb");
-        //fflush(sf_ptr);
-        goto decr;
+            // sf_ptr = fopen(*filename, "rb");
+            //fflush(sf_ptr);
+            opt_ch = opt_ch>>1;
+            continue;
 
+        }// opt=4
 
-    hshstr_out:
+        if (opt_ch == 8) {
+            printf("not implemented yet.");
+            opt_ch = opt_ch>>1;
+            continue;
+        }// opt=8
+    }//while
 
-        printf("not implemented yet.");
-        goto decr;
-
-
+    printf("\nID: %s\n", tm_str);
+    return 0;
 }
+
 
 void mk_hash_key(const char* to_be_hashed, int to_be_hsh_len, unsigned char salt_inst[64u], unsigned char hashed_out[320u],  int give_salt, int tofile) {
 
@@ -313,8 +304,8 @@ uint64_t rando_32(void) {
 //uint32_t usr_in[3] = {0};
     const uint32_t clck = clock() << 16;
 
-    printf("> %s", buff);
-    scanf("%[a-d]s", buff);
+    //printf("> %s", buff);
+    //scanf("%[a-d]s", buff);
     //printf("%s\n\n", buff);
     uint32_t rnd_byts = randombytes_random();
     //printf("%u\n", rnd_byts);
@@ -322,7 +313,7 @@ uint64_t rando_32(void) {
 
     rnd_byts = (rnd_byts ^ clck);
 
-    printf("%u\n", rnd_byts);
+    //printf("%u\n", rnd_byts);
 
     randombytes_close();
     return rnd_byts;
@@ -334,9 +325,9 @@ uint64_t rando_64(void) {
 //uint32_t usr_in[3] = {0};
     const uint64_t clck = (clock() << 16) + (clock () << 2) ;
 
-    printf(">\n");
+    //printf(">\n");
     fflush(stdout);
-    scanf("%[a-d]s", buff);
+    //scanf("%[a-d]s", buff);
     //printf("%s\n\n", buff);
     uint64_t rnd_byts = (randombytes_random() * 2) << 16;
     //printf("%lu\n", rnd_byts);
@@ -344,7 +335,7 @@ uint64_t rando_64(void) {
 
     rnd_byts = (rnd_byts ^ clck);
 
-    printf("%lu\n", rnd_byts);
+    //printf("%lu\n", rnd_byts);
 
     randombytes_close();
     return rnd_byts;
@@ -423,7 +414,7 @@ int read_hash_in(char id[10] , unsigned char hash_file_content[320u], unsigned c
         return (id_match);
     }else
     {
-        printf("\nID: %s\n",ts_id_a);
+        printf("\nID: %s\n",ts_id_b);
         return 0;
     }
 
@@ -449,6 +440,12 @@ int chk_hash(unsigned char salt_to_use[64], unsigned char hash_to_chk[320],  con
     (chk == 0) ? printf("\nCheck OK\n") : fprintf(stderr, "\nCheck failed at byte: %d\n", i);
 
     return chk;
+}
+
+void gen_keypair(unsigned char pub_key[320], unsigned char sec_key[320]) {
+
+    crypto_box_keypair(pub_key,sec_key);
+
 }
 
 int main(int argc, char** argv) {
@@ -524,11 +521,17 @@ int main(int argc, char** argv) {
         unsigned char* salt;
         salt = (unsigned char *) sodium_allocarray(64, sizeof(*salt));
 
-        mk_hash_key(PWD, strlen(PWD), salt, hashed_out, 0, 1);
+        char* pwd_in;
+        int pw_cnt =0;
+        pwd_in = recv_pwd(pwd_in, 0, &pw_cnt);
+
+        mk_hash_key(pwd_in, pw_cnt, salt, hashed_out, 0, 1);
 
         sodium_memzero(hashed_out, 320);
         sodium_memzero(hashed_out, 64);
 
+        sodium_munlock(pwd_in, pw_cnt);
+        sodium_free(pwd_in);
         sodium_free(hashed_out);
         sodium_free(salt);
 
@@ -570,11 +573,10 @@ int main(int argc, char** argv) {
             sodium_free(hashed_out);
             sodium_free(salt);
             goto opsdone;
+
         } else {
             printf( "\nGood!\n");
         }
-
-
 
         sodium_munlock(pwd_in, pw_cnt);
         sodium_free(pwd_in);
